@@ -1,0 +1,119 @@
+# ASP.NET Core
+# Build and test ASP.NET Core projects targeting .NET Core.
+# Add steps that run tests, create a NuGet package, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/dotnet-core
+
+
+trigger:
+- master
+
+pool:
+  vmImage: 'Windows-2019'
+
+variables:
+  buildConfiguration: 'Release'
+
+stages:
+- stage: 'Build'
+  displayName: 'Building web application'
+  jobs:
+    - job: 'Build'
+      displayName: 'Build job'
+
+      steps:
+        - task: DotNetCoreCLI@2
+          displayName: Build
+          inputs:
+            command: 'build'
+            projects: '**/*.csproj'
+        
+        - task: DotNetCoreCLI@2
+          displayName: Restore
+          inputs:
+            command: restore
+            projects: '**/*.csproj'
+        
+        - task: CopyFiles@2
+          displayName: 'Copy Files to: $(Build.ArtifactStagingDirectory)'
+          inputs:
+            SourceFolder: '$(Build.SourcesDirectory)'
+            Contents: '**'
+            TargetFolder: '$(Build.ArtifactStagingDirectory)'
+            CleanTargetFolder: true
+
+        - task: PublishBuildArtifacts@1
+          inputs:
+            PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+            ArtifactName: 'drop'
+            
+           
+        - task: DownloadBuildArtifacts@1
+          displayName: 'Download Build Artifacts'
+          inputs:
+            buildType: 'current'
+            downloadType: 'single'
+            artifactName: 'drop'
+            downloadPath: '$(System.ArtifactsDirectory)'
+            cleanDestinationFolder: true
+         
+        - task: NodeTool@0
+          displayName: 'Use Node 16.x'
+          inputs:
+            versionSpec: 16.x
+        
+        - task: Npm@1
+          displayName: 'npm install'
+          inputs:
+            workingDir: Client
+            verbose: false
+
+        - task: AngularCLI@1
+          displayName: 'ng build'
+          inputs:
+            project: Client
+            prod: false
+            debug: true 
+          
+        - task: CopyFiles@2
+          displayName: 'Copy Files to: $(Build.ArtifactStagingDirectory)'
+          inputs:
+            SourceFolder: '$(Build.SourcesDirectory)'
+            Contents: '*'
+            TargetFolder: '$(Build.ArtifactStagingDirectory)'
+
+        - task: ArchiveFiles@2
+          displayName: 'Archive $(System.DefaultWorkingDirectory)'
+          inputs:
+            rootFolderOrFile: '$(System.DefaultWorkingDirectory)'
+            includeRootFolder: false
+            archiveType: 'zip'
+            archiveFile: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip'
+            replaceExistingArchive: true
+        
+        - task: PublishBuildArtifacts@1
+          displayName: 'Publish Artifact: angular'
+          inputs:
+            PathtoPublish: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip'
+            ArtifactName: 'angular'
+            publishLocation: 'Container'
+
+# - stage: 'Deploy'
+#   displayName: 'Deployment'
+#   dependsOn: Build
+#   condition: succeeded()
+#   jobs:
+#     - job: 'Deployment'
+#       displayName: 'Deploy to app service'
+#       steps:
+#       - task: DotNetCoreCLI@2
+#         inputs:
+#           command: 'publish'
+#           publishWebProjects: true
+          
+#       - task: AzureWebApp@1
+#         inputs:
+#           azureSubscription: 'Microsoft Partner Network(71815b3c-ac05-4504-8f3f-6d7f27ce722f)'
+#           appType: 'webApp'
+#           appName: 'Dotnet-angular-website'
+#           package: '$(System.DefaultWorkingDirectory)/**/*.zip'
+#           deploymentMethod: 'zipDeploy'
